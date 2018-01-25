@@ -252,6 +252,24 @@ function App(options) {
           icon: 'icon-distribute-vertically-tool',
           label: 'Distribute Elements Vertically',
           action: this.compose('triggerAction', 'distributeVertically')
+        }),
+        Separator(),
+        MultiButton({
+          id: 'create',
+          choices: [
+            {
+              id: 'deploy-bpmn',
+              icon: 'icon-deploy',
+              label: 'Deploy Current Process',
+              action: this.compose('triggerAction', 'deploy-bpmn'),
+              primary: true
+            },
+            {
+              id: 'deploy-engine-config',
+              label: 'Configure Engine',
+              action: this.compose('triggerAction', 'show-engine-config')
+            }
+          ]
         })
       ]
     }
@@ -287,7 +305,6 @@ function App(options) {
 
 
   this.events.on('tools:state-changed', (tab, newState) => {
-
     var button;
 
     if (this.activeTab !== tab) {
@@ -338,6 +355,12 @@ function App(options) {
     // update set color button state
     button = find(this.menuEntries.bpmn.buttons, { id: 'set-color' });
     button.disabled = !newState.elementsSelected;
+
+    // update deploy status
+    if (typeof newState.deployDisabled !== 'undefined') {
+      button = find(this.menuEntries.bpmn.buttons, { id: 'deploy-bpmn' });
+      button.disabled = newState.deployDisabled;
+    }
 
     this.events.emit('changed');
   });
@@ -411,7 +434,9 @@ App.prototype.render = function() {
       <ModalOverlay
         isActive={ this._activeOverlay }
         content={ this._overlayContent }
-        events={ this.events } />
+        events={ this.events }
+        bpmnDeployUrl={ this.bpmnDeployUrl }
+        persistBpmnDeployUrl={ this.persistBpmnDeployUrl }/>
       <MenuBar entries={ this.menuEntries } />
       <Tabbed
         className="main"
@@ -652,6 +677,10 @@ App.prototype.triggerAction = function(action, options) {
     return this.exportTab(activeTab, options.type);
   }
 
+  if (action === 'show-engine-config') {
+    return this.toggleOverlay('engineConfig');
+  }
+
   // forward other actions to active tab
   activeTab.triggerAction(action, options);
 };
@@ -694,7 +723,6 @@ App.prototype.openTabs = function(files) {
   }
 
   var openedTabs = files.map((file) => {
-
     // make sure we do not double open tabs
     // for the same file
     return this.findTab(file) || this._createTab(file);
@@ -726,7 +754,6 @@ App.prototype.openTab = function(file) {
  */
 App.prototype._createTab = function(file) {
   var tabProvider = this._findTabProvider(file.fileType);
-
   return this._addTab(tabProvider.createTab(file));
 };
 
@@ -1212,7 +1239,6 @@ App.prototype._addTab = function(tab) {
  * @param {Function} done
  */
 App.prototype.persistWorkspace = function(done) {
-
   var config = {
     tabs: [],
     activeTab: -1
@@ -1242,6 +1268,10 @@ App.prototype.persistWorkspace = function(done) {
   // let others store stuff, too
   this.events.emit('workspace:persist', config);
 
+  //store bpmn deploy url
+  console.log('new bpmndeployurl: ', this.bpmnDeployUrl);
+  config.bpmnDeployUrl = this.bpmnDeployUrl;
+
   // actually save
   this.workspace.save(config, (err, config) => {
     this.events.emit('workspace:persisted', err, config);
@@ -1269,7 +1299,8 @@ App.prototype.restoreWorkspace = function(done) {
         open: false,
         height: 150
       }
-    }
+    },
+    bpmnDeployUrl: 'http://localhost:8080/engine-rest/deployment/create'
   };
 
 
@@ -1289,6 +1320,8 @@ App.prototype.restoreWorkspace = function(done) {
     if (workspaceConfig.activeTab && workspaceConfig.activeTab !== -1) {
       this.activeTab = this.tabs[workspaceConfig.activeTab];
     }
+
+    this.bpmnDeployUrl = workspaceConfig.bpmnDeployUrl;
 
     this.events.emit('layout:update', workspaceConfig.layout);
 
@@ -1476,6 +1509,17 @@ App.prototype.quit = function() {
   }, {
     skipIfDiscardChanges: true
   });
+};
+
+
+/**
+ * Changes and persist bpmn deployment url
+ * @param url
+ */
+App.prototype.persistBpmnDeployUrl = function(url) {
+  this.bpmnDeployUrl = url;
+  console.log('persist url: ', this.bpmnDeployUrl);
+  this.events.emit('workspace:changed');
 };
 
 var rdebug = require('debug')('app - external change');

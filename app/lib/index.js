@@ -8,6 +8,10 @@ var path = require('path');
 
 var forEach = require('lodash/collection/forEach');
 
+var request = require('request');
+var fs = require('fs');
+
+
 /**
  * automatically report crash reports
  *
@@ -150,6 +154,32 @@ renderer.on('dialog:saving-denied', function(done) {
 
 renderer.on('dialog:content-changed', function(done) {
   dialog.showDialog('contentChanged', done);
+});
+
+renderer.on('deploy:bpmn', function(data, done) {
+  var file = data.file;
+  if (!file || !file.fileType || !file.name || !file.path) {
+    return done('Error: file name and path must be provided.');
+  }
+
+  var url = config.get('workspace').bpmnDeployUrl;
+  var deploymentName = file.name.split('.'+file.fileType)[0];
+  var formData = { 'deployment-name': deploymentName };
+  formData[file.name] = fs.createReadStream(file.path);
+
+  var DEPLOY_CONFIG = {
+    url: url,
+    formData: formData
+  };
+
+  request.post(DEPLOY_CONFIG, function(err, res, body) {
+    if (err) {
+      return done(err);
+    } else if (res.statusCode !== 200) {
+      return done('Failed to deploy process. Server responded with status code ' + res.statusCode + '.');
+    }
+    return done(err, body);
+  });
 });
 
 

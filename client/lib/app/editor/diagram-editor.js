@@ -12,6 +12,7 @@ var needsOverride = require('util/needs-override');
 
 var getWarnings = require('app/util/get-warnings');
 
+var browser = require('../../util/browser');
 
 /**
  * Base diagram editor.
@@ -193,6 +194,14 @@ DiagramEditor.prototype.triggerAction = function(action, options) {
     return modeler.get('commandStack').redo();
   }
 
+  if (action === 'deploy-bpmn') {
+    return browser.send('deploy:bpmn', { file: this.file }, function(err, response) {
+      if (err) {
+        return console.error('| deploy:bpmn |' + err);
+      }
+      return debug('deploy:bpmn | response');
+    });
+  }
   this.triggerEditorActions(action, options);
 };
 
